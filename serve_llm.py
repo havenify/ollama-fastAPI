@@ -1,7 +1,7 @@
 from flask import Flask, request, Response, jsonify
 from flask_cors import CORS
 import requests
-import uuid
+import uuid, json
 
 app = Flask(__name__)
 CORS(app)
@@ -47,32 +47,27 @@ def stream():
 
     history = sessions[session_id]
     chat_prompt = "\n".join([f"User: {h['user']}\nAI: {h['bot']}" for h in history])
+
     system_instruction = """You are a helpful AI assistant. 
-Format all your responses in GitHub-flavoured **Markdown**.
+Format all your responses in GitHub-flavored **Markdown**.
 Use:
-- Use headings like ##, ###, etc. for sections
-- Bold text for important points
-- Bullet points with `-` or numbered lists with `1.` for lists
-- Tables where comparisons or structures are needed
-  Use a header row, seperator row (`---`) and separater columns with `|`.
-- Single backticks for inline code
-- Use emojis to enhance the message (e.g., 😊, 🚀)
-- Use links for references (e.g., [OpenAI](https://openai.com))
-- Use images where necessary (e.g., ![alt text](image_url))
-- Use blockquotes for quotes or important notes
-- Triple backticks for code blocks
-Keep responses clear and readable.
+- Headings (##, ###)
+- Bold text
+- Bullet points and numbered lists
+- Tables using pipes (`|`) and separator rows
+- Inline code with backticks, code blocks with triple backticks
+- Links, images, emojis, and blockquotes
+Keep it readable, elegant, and informative.
 """
-    full_prompt = f"{system_instruction}{chat_prompt}\nUser: {prompt}\nAI:"
-    print(f"Full Prompt: {full_prompt}")
+
+    full_prompt = f"{system_instruction}\n{chat_prompt}\nUser: {prompt}\nAI:"
     app.logger.info(f"Session ID: {session_id}")
     app.logger.info(f"Model: {model}")
-    app.logger.info(f"Full Prompt: {full_prompt}")
+    app.logger.info(f"Prompt: {full_prompt}")
 
     def generate():
         collected = ""
         try:
-            
             with requests.post(f"{OLLAMA_HOST}/api/generate", json={
                 "model": model,
                 "prompt": full_prompt,
@@ -81,37 +76,31 @@ Keep responses clear and readable.
                 app.logger.info("Stream request sent successfully.")
                 for line in r.iter_lines():
                     if line:
-                        token = line.decode("utf-8").replace("data: ", "")
-                        app.logger.debug(f"Received line: {token}")
-                        if token.strip() == "[DONE]":
-                            app.logger.info("Stream completed.")
-                            yield f"data: {{\"status\": \"done\", \"response\": \"{collected}\"}}\n\n"
+                        line_decoded = line.decode("utf-8").replace("data: ", "")
+                        if line_decoded.strip() == "[DONE]":
+                            yield f"data: {json.dumps({'status': 'done', 'response': collected})}\n\n"
                             break
                         try:
-                            # Replace 'false' with 'False' and 'true' with 'True' for Python compatibility
-                            token = token.replace("false", "False").replace("true", "True")
-                            token_data = eval(token)
+                            # Avoid using eval; use json.loads after sanitizing
+                            token_data = json.loads(line_decoded)
                             if "response" in token_data:
                                 word = token_data["response"]
                                 collected += word
-                                yield f"data: {{\"status\": \"streaming\", \"response\": \"{word}\", \"markdown\": \"{word}\"}}\n\n"
+                                yield f"data: {json.dumps({'status': 'streaming', 'response': word})}\n\n"
                             else:
-                                app.logger.error(f"'response' key not found in token data: {token_data}")
-                                yield f"data: {{\"status\": \"error\", \"message\": \"'response' key not found in token data.\"}}\n\n"
+                                error = "'response' key missing"
+                                yield f"data: {json.dumps({'status': 'error', 'message': error})}\n\n"
                                 break
                         except Exception as e:
-                            error_message = f"Error processing token: {e}"
-                            app.logger.error(error_message)
-                            yield f"data: {{\"status\": \"error\", \"message\": \"{error_message}\"}}\n\n"
+                            error = f"Error parsing chunk: {e}"
+                            yield f"data: {json.dumps({'status': 'error', 'message': error})}\n\n"
                             break
         except Exception as e:
-            error_message = f"Error in stream request: {e}"
-            app.logger.error(error_message)
-            yield f"data: {{\"status\": \"error\", \"message\": \"{error_message}\"}}\n\n"
+            error = f"Stream connection error: {e}"
+            yield f"data: {json.dumps({'status': 'error', 'message': error})}\n\n"
         sessions[session_id].append({"user": prompt, "bot": collected})
 
-    return Response(generate(), content_type="application/json")
-
+    return Response(generate(), content_type="text/event-stream")
 @app.route("/models", methods=["GET"])
 def get_models():
     """API to fetch all available models dynamically from Ollama."""
