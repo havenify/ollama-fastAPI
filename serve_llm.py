@@ -34,6 +34,22 @@ def chat():
     sessions[session_id].append({"user": prompt, "bot": response})
 
     return jsonify({"response": response, "session_id": session_id})
+def clean_markdown(raw_text):
+    # Optional: remove backticks around tables
+    if '|' in raw_text and '```' in raw_text:
+        lines = raw_text.splitlines()
+        new_lines = []
+        inside_code = False
+        for line in lines:
+            if line.strip().startswith('```') and '|' in line:
+                inside_code = not inside_code
+                continue  # skip the backtick line
+            if inside_code:
+                new_lines.append(line)
+            else:
+                new_lines.append(line)
+        return '\n'.join(new_lines)
+    return raw_text
 
 @app.route("/stream", methods=["POST"])
 def stream():
@@ -49,15 +65,25 @@ def stream():
     chat_prompt = "\n".join([f"User: {h['user']}\nAI: {h['bot']}" for h in history])
 
     system_instruction = """You are a helpful AI assistant. 
-Format all your responses in GitHub-flavored **Markdown**.
+Always respond using clean GitHub-flavored **Markdown**.
+
+For tables:
+- Add a blank line before and after the table.
+- Use pipes (`|`) for columns.
+- Always include a header separator row (`|---|---|---|`).
+- Never wrap tables in backticks or code blocks.
+- Do not render them as monospaced code or fenced markdown.
+- Render tables inline, not as code blocks.
+
 Use:
-- Headings (##, ###)
-- Bold text
+- `##` and `###` for sections
+- `**bold**` for emphasis
 - Bullet points and numbered lists
-- Tables using pipes (`|`) and separator rows
-- Inline code with backticks, code blocks with triple backticks
-- Links, images, emojis, and blockquotes
-Keep it readable, elegant, and informative.
+- Inline `code` and triple backtick blocks only for code snippets (not tables)
+- Markdown links: `[text](url)`
+- Emojis to enhance (e.g., ✅, 📊, 🚀)
+
+Keep everything readable, structured, and visually pleasing.
 """
 
     full_prompt = f"{system_instruction}\n{chat_prompt}\nUser: {prompt}\nAI:"
@@ -86,7 +112,9 @@ Keep it readable, elegant, and informative.
                             if "response" in token_data:
                                 word = token_data["response"]
                                 collected += word
-                                yield f"data: {json.dumps({'status': 'streaming', 'response': word})}\n\n"
+                                cleaned = clean_markdown(collected)
+                                yield f"data: {json.dumps({'status': 'streaming', 'response': cleaned})}\n\n"
+                                # yield f"data: {json.dumps({'status': 'streaming', 'response': word})}\n\n"
                             else:
                                 error = "'response' key missing"
                                 yield f"data: {json.dumps({'status': 'error', 'message': error})}\n\n"
