@@ -67,29 +67,16 @@ def stream():
     system_instruction = """You are a helpful AI assistant. 
 Always respond using clean GitHub-flavored **Markdown**.
 
-For tables:
-- Add a blank line before and after the table.
-- Use pipes (`|`) for columns.
-- Always include a header separator row (`|---|---|---|`).
-- Never wrap tables in backticks or code blocks.
-- Do not render them as monospaced code or fenced markdown.
-- Render tables inline, not as code blocks.
-
-Use:
-- `##` and `###` for sections
-- `**bold**` for emphasis
-- Bullet points and numbered lists
-- Inline `code` and triple backtick blocks only for code snippets (not tables)
-- Markdown links: `[text](url)`
-- Emojis to enhance (e.g., ✅, 📊, 🚀)
-
-Keep everything readable, structured, and visually pleasing.
+- For tables, use:
+  - A blank line before and after
+  - `|` to separate columns
+  - `|---|---|` separator row after header
+  - Never wrap tables inside triple backticks
+- Use **bold**, `inline code`, bullet lists, and `###` headings
+- Do NOT repeat your answer or prefix each line with the same phrase
 """
 
     full_prompt = f"{system_instruction}\n{chat_prompt}\nUser: {prompt}\nAI:"
-    app.logger.info(f"Session ID: {session_id}")
-    app.logger.info(f"Model: {model}")
-    app.logger.info(f"Prompt: {full_prompt}")
 
     def generate():
         collected = ""
@@ -99,33 +86,25 @@ Keep everything readable, structured, and visually pleasing.
                 "prompt": full_prompt,
                 "stream": True
             }, stream=True) as r:
-                app.logger.info("Stream request sent successfully.")
+                buffer = ""
                 for line in r.iter_lines():
-                    if line:
-                        line_decoded = line.decode("utf-8").replace("data: ", "")
-                        if line_decoded.strip() == "[DONE]":
+                    if not line:
+                        continue
+                    try:
+                        token_json = line.decode("utf-8").replace("data: ", "")
+                        if token_json.strip() == "[DONE]":
                             yield f"data: {json.dumps({'status': 'done', 'response': collected})}\n\n"
                             break
-                        try:
-                            # Avoid using eval; use json.loads after sanitizing
-                            token_data = json.loads(line_decoded)
-                            if "response" in token_data:
-                                word = token_data["response"]
-                                collected += word
-                                cleaned = clean_markdown(collected)
-                                yield f"data: {json.dumps({'status': 'streaming', 'response': cleaned})}\n\n"
-                                # yield f"data: {json.dumps({'status': 'streaming', 'response': word})}\n\n"
-                            else:
-                                error = "'response' key missing"
-                                yield f"data: {json.dumps({'status': 'error', 'message': error})}\n\n"
-                                break
-                        except Exception as e:
-                            error = f"Error parsing chunk: {e}"
-                            yield f"data: {json.dumps({'status': 'error', 'message': error})}\n\n"
-                            break
+                        token_data = json.loads(token_json)
+                        word = token_data.get("response", "")
+                        if word:
+                            collected += word
+                            yield f"data: {json.dumps({'status': 'streaming', 'response': word})}\n\n"
+                    except Exception as e:
+                        yield f"data: {json.dumps({'status': 'error', 'message': str(e)})}\n\n"
+                        break
         except Exception as e:
-            error = f"Stream connection error: {e}"
-            yield f"data: {json.dumps({'status': 'error', 'message': error})}\n\n"
+            yield f"data: {json.dumps({'status': 'error', 'message': str(e)})}\n\n"
         sessions[session_id].append({"user": prompt, "bot": collected})
 
     return Response(generate(), content_type="text/event-stream")
