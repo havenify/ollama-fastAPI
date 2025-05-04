@@ -51,6 +51,30 @@ def clean_markdown(raw_text):
         return '\n'.join(new_lines)
     return raw_text
 
+@app.route("/embed", methods=["POST"])
+def embed():
+    data = request.json
+    text = data.get("text", "")
+    model = data.get("model", "mistral")
+
+    if not text:
+        return jsonify({"error": "Text is required"}), 400
+
+    try:
+        resp = requests.post(f"{OLLAMA_HOST}/api/embeddings", json={
+            "model": model,
+            "prompt": text
+        })
+        resp.raise_for_status()
+        embedding_data = resp.json()
+
+        return jsonify({
+            "embedding": embedding_data.get("embedding", []),
+            "model": model,
+            "dimension": len(embedding_data.get("embedding", []))
+        })
+    except requests.RequestException as e:
+        return jsonify({"error": f"Ollama request failed: {str(e)}"}), 500
 @app.route("/stream", methods=["POST"])
 def stream():
     data = request.json
