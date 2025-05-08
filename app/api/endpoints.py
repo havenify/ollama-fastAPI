@@ -2,7 +2,7 @@ import requests
 from flask import request, Response, jsonify
 import uuid, json
 from app.services.grn import fetch_and_rank_grns, build_prompt
-from app.services.ollama import get_embedding, ask_ollama, get_models, stream_ollama
+from app.services.ollama import get_embedding, ask_ollama, get_models, stream_ollama, forward_to_ollama
 
 sessions = {}
 
@@ -87,3 +87,14 @@ Always respond using clean GitHub-flavored **Markdown**.
                 "error": "Failed to fetch models.",
                 "details": str(e)
             }), 500
+
+    @app.route('/api/<endpoint>', methods=['POST'])
+    def proxy(endpoint):
+        data = request.json
+        resp, status = forward_to_ollama(endpoint, data, method="POST")
+        return jsonify(resp), status
+
+    @app.route('/api/status', methods=['GET'])
+    def status():
+        resp, status = forward_to_ollama("status", {}, method="GET")
+        return jsonify(resp), status

@@ -56,3 +56,16 @@ def get_models():
         return response.json().get("models", [])
     except requests.exceptions.RequestException as e:
         raise RuntimeError(f"Failed to fetch models: {e}")
+
+def forward_to_ollama(endpoint, data, method="POST", ollama_host=OLLAMA_HOST):
+    url = f"{ollama_host}/{endpoint}"
+    try:
+        if method == "POST":
+            response = requests.post(url, json=data)
+        elif method == "GET":
+            response = requests.get(url, params=data)
+        else:
+            raise ValueError("Unsupported HTTP method")
+        return response.json(), response.status_code
+    except requests.exceptions.RequestException as e:
+        return {"error": str(e)}, 500
