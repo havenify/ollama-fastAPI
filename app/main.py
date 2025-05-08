@@ -3,7 +3,7 @@ from flask_cors import CORS
 from app.api.endpoints import register_routes
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["http://localhost", "http://localhost:8080", "https://chat.techpranee.com"])
 register_routes(app)
 
 if __name__ == "__main__":
