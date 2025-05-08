@@ -6,7 +6,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY serve_llm.py .
+COPY app/ app/
 
 EXPOSE 8288
 
-CMD ["python", "serve_llm.py"]
+CMD ["python", "-m", "app.main"]
