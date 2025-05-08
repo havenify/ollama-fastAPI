@@ -2,7 +2,7 @@ import requests
 from flask import request, Response, jsonify
 import uuid, json
 from app.services.grn import fetch_and_rank_grns, build_prompt
-from app.services.ollama import get_embedding, ask_ollama
+from app.services.ollama import get_embedding, ask_ollama, get_models
 
 sessions = {}
 
@@ -51,3 +51,14 @@ def register_routes(app):
                 {"summary": doc["summary"], "score": doc["score"]} for doc in top_docs
             ]
         })
+    
+    @app.route("/models", methods=["GET"])
+    def models_endpoint():
+        try:
+            models = get_models()
+            return jsonify({"models": models})
+        except Exception as e:
+            return jsonify({
+                "error": "Failed to fetch models.",
+                "details": str(e)
+            }), 500

@@ -18,3 +18,11 @@ def ask_ollama(prompt, model="mistral"):
     })
     resp.raise_for_status()
     return resp.json()["response"]
+
+def get_models():
+    try:
+        response = requests.get(f"{OLLAMA_HOST}/api/tags")
+        response.raise_for_status()
+        return response.json().get("models", [])
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Failed to fetch models: {e}")
