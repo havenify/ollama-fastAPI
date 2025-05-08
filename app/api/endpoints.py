@@ -2,7 +2,7 @@ import requests
 from flask import request, Response, jsonify
 import uuid, json
 from app.services.grn import fetch_and_rank_grns, build_prompt
-from app.services.ollama import get_embedding, ask_ollama, get_models
+from app.services.ollama import get_embedding, ask_ollama, get_models, stream_ollama
 
 sessions = {}
 
@@ -33,6 +33,31 @@ def register_routes(app):
             "model": model,
             "dimension": len(embedding)
         })
+
+    @app.route("/stream", methods=["POST"])
+    def stream():
+        data = request.json
+        prompt = data.get("prompt", "")
+        session_id = data.get("session_id") or str(uuid.uuid4())
+        model = data.get("model", "mistral")
+        if session_id not in sessions:
+            sessions[session_id] = []
+        history = sessions[session_id]
+        chat_prompt = "\n".join([f"User: {h['user']}\nAI: {h['bot']}" for h in history])
+        system_instruction = """You are a helpful AI assistant. 
+Always respond using clean GitHub-flavored **Markdown**.
+
+- For tables, use:
+  - A blank line before and after
+  - `|` to separate columns
+  - `|---|---|` separator row after header
+  - Never wrap tables inside triple backticks
+- Use **bold**, `inline code`, bullet lists, and `###` headings
+- Do NOT repeat your answer or prefix each line with the same phrase
+"""
+        full_prompt = f"{system_instruction}\n{chat_prompt}\nUser: {prompt}\nAI:"
+        generate = stream_ollama(full_prompt, model)
+        return Response(generate(), content_type="text/event-stream")
 
     @app.route("/rag_query", methods=["POST"])
     def rag_query():
