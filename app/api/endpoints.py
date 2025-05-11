@@ -61,22 +61,45 @@ Always respond using clean GitHub-flavored **Markdown**.
 
     @app.route("/rag_query", methods=["POST"])
     def rag_query():
-        user_question = request.json.get("question", "")
-        model = request.json.get("model", "mistral")
-        top_k = int(request.json.get("top_k", 3))
-        if not user_question:
-            return jsonify({"error": "Question is required"}), 400
-        query_embedding = get_embedding(user_question, model)
-        top_docs = fetch_and_rank_grns(query_embedding, top_k=top_k)
-        prompt = build_prompt(top_docs, user_question)
-        answer = ask_ollama(prompt, model)
-        return jsonify({
-            "answer": answer,
-            "top_docs": [
-                {"summary": doc["summary"], "score": doc["score"]} for doc in top_docs
-            ]
-        })
-    
+        try:
+            user_question = request.json.get("question", "")
+            if not user_question:
+                return jsonify({"error": "Question is required"}), 400
+
+            model = request.json.get("model", "mistral")
+            top_k = request.json.get("top_k", 3)
+            if not isinstance(top_k, int) or top_k <= 0:
+                return jsonify({"error": "top_k must be a positive integer"}), 400
+
+            try:
+                query_embedding = get_embedding(user_question, model)
+            except Exception as e:
+                return jsonify({"error": "Failed to generate embedding", "details": str(e)}), 500
+
+            try:
+                top_docs = fetch_and_rank_grns(query_embedding, top_k=top_k)
+            except Exception as e:
+                return jsonify({"error": "Failed to fetch and rank GRNs", "details": str(e)}), 500
+
+            try:
+                prompt = build_prompt(top_docs, user_question)
+            except Exception as e:
+                return jsonify({"error": "Failed to build prompt", "details": str(e)}), 500
+
+            try:
+                answer = ask_ollama(prompt, model)
+            except Exception as e:
+                return jsonify({"error": "Failed to generate answer", "details": str(e)}), 500
+
+            return jsonify({
+                "answer": answer,
+                "top_docs": [
+                    {"summary": doc["summary"], "score": doc["score"]} for doc in top_docs
+                ]
+            })
+        except Exception as e:
+            return jsonify({"error": "An unexpected error occurred", "details": str(e)}), 500
+
     @app.route("/models", methods=["GET"])
     def models_endpoint():
         try:

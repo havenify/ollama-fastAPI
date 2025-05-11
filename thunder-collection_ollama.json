@@ -1,0 +1,95 @@
+{
+  "client": "Thunder Client",
+  "collectionName": "Ollama API",
+  "requests": [
+    {
+      "name": "Chat Endpoint",
+      "method": "POST",
+      "url": "http://localhost:8288/chat",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": {
+          "prompt": "Hello, how are you?",
+          "session_id": "12345",
+          "model": "mistral"
+        }
+      }
+    },
+    {
+      "name": "Embed Endpoint",
+      "method": "POST",
+      "url": "http://localhost:8288/embed",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": {
+          "text": "Sample text to embed",
+          "model": "mistral"
+        }
+      }
+    },
+    {
+      "name": "Stream Endpoint",
+      "method": "POST",
+      "url": "http://localhost:8288/stream",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": {
+          "prompt": "Stream this text",
+          "session_id": "12345",
+          "model": "mistral"
+        }
+      }
+    },
+    {
+      "name": "RAG Query Endpoint",
+      "method": "POST",
+      "url": "http://localhost:8288/rag_query",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": {
+          "question": "What is the capital of France?",
+          "model": "mistral",
+          "top_k": 3
+        }
+      }
+    },
+    {
+      "name": "Models Endpoint",
+      "method": "GET",
+      "url": "http://localhost:8288/models",
+      "headers": []
+    },
+    {
+      "name": "Dynamic Proxy Endpoint",
+      "method": "POST",
+      "url": "http://localhost:8288/api/<endpoint>",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": {
+          "key": "value"
+        }
+      }
+    },
+    {
+      "name": "Status Endpoint",
+      "method": "GET",
+      "url": "http://localhost:8288/api/status",
+      "headers": []
+    }
+  ]
+}
