@@ -1,8 +1,8 @@
 from pymongo import MongoClient
 from app.utils.similarity import cosine_similarity
 
-MONGO_URI = "mongodb://localhost:27017"
-DB_NAME = "zovia"
+MONGO_URI = "mongodb+srv://erp_staging:eEGi8pRF3dUDpIOO@cleanzy.fvlqgga.mongodb.net/erp?retryWrites=true&w=majority"
+DB_NAME = "erp"
 COLLECTION_NAME = "grns"
 
 def fetch_and_rank_grns(query_embedding, top_k=3):
