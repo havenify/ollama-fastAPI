@@ -1,12 +1,110 @@
 import requests
 from flask import request, Response, jsonify
 import uuid, json
+from werkzeug.utils import secure_filename
+import os
 from app.services.grn import fetch_and_rank_grns, build_prompt
 from app.services.ollama import get_embedding, ask_ollama, get_models, stream_ollama, forward_to_ollama
+from app.services.whisper import whisper_service
 
 sessions = {}
 
+# Allowed audio file extensions
+ALLOWED_AUDIO_EXTENSIONS = {'mp3', 'wav', 'flac', 'm4a', 'mp4', 'avi', 'mov', 'wmv', 'ogg', 'webm'}
+
+def allowed_audio_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_AUDIO_EXTENSIONS
+
 def register_routes(app):
+    @app.route("/transcribe", methods=["POST"])
+    def transcribe_audio():
+        """
+        Transcribe audio file using Whisper
+        Accepts: multipart/form-data with audio file
+        Optional parameters: language, task, word_timestamps, vad_filter
+        """
+        try:
+            # Check if audio file is provided
+            if 'audio' not in request.files:
+                return jsonify({"error": "No audio file provided"}), 400
+            
+            audio_file = request.files['audio']
+            if audio_file.filename == '':
+                return jsonify({"error": "No audio file selected"}), 400
+            
+            if not allowed_audio_file(audio_file.filename):
+                return jsonify({
+                    "error": "Unsupported audio format", 
+                    "supported_formats": list(ALLOWED_AUDIO_EXTENSIONS)
+                }), 400
+            
+            # Get optional parameters
+            language = request.form.get('language')  # e.g., 'en', 'es', 'fr'
+            task = request.form.get('task', 'transcribe')  # 'transcribe' or 'translate'
+            word_timestamps = request.form.get('word_timestamps', 'false').lower() == 'true'
+            vad_filter = request.form.get('vad_filter', 'true').lower() == 'true'
+            
+            # Validate task parameter
+            if task not in ['transcribe', 'translate']:
+                return jsonify({"error": "Task must be 'transcribe' or 'translate'"}), 400
+            
+            # Perform transcription
+            result = whisper_service.transcribe_audio(
+                audio_file,
+                language=language,
+                task=task,
+                word_timestamps=word_timestamps,
+                vad_filter=vad_filter
+            )
+            
+            return jsonify({
+                "success": True,
+                "transcription": result
+            })
+            
+        except Exception as e:
+            return jsonify({
+                "error": "Transcription failed",
+                "details": str(e)
+            }), 500
+    
+    @app.route("/transcribe/languages", methods=["GET"])
+    def get_supported_languages():
+        """Get list of supported languages for transcription"""
+        try:
+            languages = whisper_service.get_supported_languages()
+            return jsonify({
+                "success": True,
+                "supported_languages": languages,
+                "note": "Use language codes (e.g., 'en' for English, 'es' for Spanish)"
+            })
+        except Exception as e:
+            return jsonify({
+                "error": "Failed to get supported languages",
+                "details": str(e)
+            }), 500
+    
+    @app.route("/transcribe/health", methods=["GET"])
+    def whisper_health_check():
+        """Check if Whisper service is working"""
+        try:
+            # Simple health check
+            if whisper_service.model is None:
+                return jsonify({
+                    "status": "unhealthy",
+                    "error": "Whisper model not initialized"
+                }), 503
+            
+            return jsonify({
+                "status": "healthy",
+                "model": "large-v3",
+                "device": "cuda" if whisper_service.model.device == "cuda" else "cpu"
+            })
+        except Exception as e:
+            return jsonify({
+                "status": "unhealthy",
+                "error": str(e)
+            }), 503
     @app.route("/chat", methods=["POST"])
     def chat():
         prompt = request.json.get("prompt", "")

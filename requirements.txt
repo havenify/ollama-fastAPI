@@ -3,3 +3,6 @@ flask-cors
 requests
 pymongo
 numpy
+faster-whisper
+torch
+torchaudio

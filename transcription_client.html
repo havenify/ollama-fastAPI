@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Transcription API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, button {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .loading {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        .progress {
+            margin-top: 10px;
+        }
+        .segments {
+            margin-top: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .segment {
+            margin-bottom: 10px;
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-radius: 3px;
+        }
+        .timestamp {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Audio Transcription API Test</h1>
+        <p>Upload an audio file to transcribe it using the Whisper large-v3 model.</p>
+        
+        <form id="transcriptionForm">
+            <div class="form-group">
+                <label for="audioFile">Audio File:</label>
+                <input type="file" id="audioFile" accept="audio/*,video/*" required>
+                <small>Supported formats: MP3, WAV, FLAC, M4A, MP4, AVI, MOV, WMV, OGG, WebM</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="language">Language (optional):</label>
+                <select id="language">
+                    <option value="">Auto-detect</option>
+                    <option value="en">English</option>
+                    <option value="es">Spanish</option>
+                    <option value="fr">French</option>
+                    <option value="de">German</option>
+                    <option value="it">Italian</option>
+                    <option value="pt">Portuguese</option>
+                    <option value="ru">Russian</option>
+                    <option value="ja">Japanese</option>
+                    <option value="ko">Korean</option>
+                    <option value="zh">Chinese</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="task">Task:</label>
+                <select id="task">
+                    <option value="transcribe">Transcribe (keep original language)</option>
+                    <option value="translate">Translate to English</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="wordTimestamps"> Include word timestamps
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="vadFilter" checked> Use voice activity detection
+                </label>
+            </div>
+            
+            <button type="submit" id="submitBtn">🚀 Transcribe Audio</button>
+        </form>
+        
+        <div id="result" style="display: none;"></div>
+        
+        <div style="margin-top: 30px;">
+            <h3>API Health Status</h3>
+            <button type="button" onclick="checkHealth()">Check Health</button>
+            <div id="healthStatus"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8288';
+        
+        document.getElementById('transcriptionForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const audioFile = document.getElementById('audioFile').files[0];
+            if (!audioFile) {
+                showResult('Please select an audio file.', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('audio', audioFile);
+            formData.append('language', document.getElementById('language').value);
+            formData.append('task', document.getElementById('task').value);
+            formData.append('word_timestamps', document.getElementById('wordTimestamps').checked);
+            formData.append('vad_filter', document.getElementById('vadFilter').checked);
+            
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Transcribing...';
+            
+            showResult('Processing audio file... This may take a few minutes depending on the file size.', 'loading');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/transcribe`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    displayTranscriptionResult(result.transcription);
+                } else {
+                    showResult(`Error: ${result.error}\nDetails: ${result.details || 'No additional details'}`, 'error');
+                }
+            } catch (error) {
+                showResult(`Network error: ${error.message}\n\nMake sure the API server is running on ${API_BASE_URL}`, 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '🚀 Transcribe Audio';
+            }
+        });
+        
+        function displayTranscriptionResult(transcription) {
+            let resultText = `✅ Transcription Complete!\n\n`;
+            resultText += `📝 Text: ${transcription.text}\n\n`;
+            resultText += `🌍 Language: ${transcription.language} (confidence: ${(transcription.language_probability * 100).toFixed(1)}%)\n`;
+            resultText += `⏱️ Duration: ${transcription.duration.toFixed(2)} seconds\n`;
+            resultText += `📊 Segments: ${transcription.segments.length}\n\n`;
+            
+            showResult(resultText, 'success');
+            
+            // Show segments if available
+            if (transcription.segments && transcription.segments.length > 0) {
+                const segmentsDiv = document.createElement('div');
+                segmentsDiv.className = 'segments';
+                segmentsDiv.innerHTML = '<h4>📋 Transcription Segments:</h4>';
+                
+                transcription.segments.forEach((segment, index) => {
+                    const segmentDiv = document.createElement('div');
+                    segmentDiv.className = 'segment';
+                    
+                    const timestamp = document.createElement('div');
+                    timestamp.className = 'timestamp';
+                    timestamp.textContent = `${formatTime(segment.start)} - ${formatTime(segment.end)}`;
+                    
+                    const text = document.createElement('div');
+                    text.textContent = segment.text.trim();
+                    
+                    segmentDiv.appendChild(timestamp);
+                    segmentDiv.appendChild(text);
+                    segmentsDiv.appendChild(segmentDiv);
+                });
+                
+                document.getElementById('result').appendChild(segmentsDiv);
+            }
+        }
+        
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = (seconds % 60).toFixed(1);
+            return `${mins}:${secs.padStart(4, '0')}`;
+        }
+        
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = `result ${type}`;
+            resultDiv.textContent = message;
+            resultDiv.style.display = 'block';
+            
+            // Clear any existing segments
+            const existingSegments = resultDiv.querySelector('.segments');
+            if (existingSegments) {
+                existingSegments.remove();
+            }
+        }
+        
+        async function checkHealth() {
+            const healthDiv = document.getElementById('healthStatus');
+            healthDiv.innerHTML = '<div class="loading">Checking health...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/transcribe/health`);
+                const result = await response.json();
+                
+                if (response.ok) {
+                    healthDiv.innerHTML = `
+                        <div class="success">
+                            ✅ Service is healthy<br>
+                            Model: ${result.model}<br>
+                            Device: ${result.device}
+                        </div>
+                    `;
+                } else {
+                    healthDiv.innerHTML = `
+                        <div class="error">
+                            ❌ Service is unhealthy<br>
+                            Error: ${result.error}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                healthDiv.innerHTML = `
+                    <div class="error">
+                        ❌ Cannot connect to API<br>
+                        Error: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        // Check health on page load
+        window.addEventListener('load', checkHealth);
+    </script>
+</body>
+</html>
