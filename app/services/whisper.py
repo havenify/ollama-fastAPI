@@ -14,19 +14,74 @@ class WhisperService:
     
     def _initialize_model(self):
         """Initialize the Whisper model with error handling"""
-        try:
-            logger.info("Initializing Whisper model (large-v3)...")
-            self.model = WhisperModel("large-v3", device="cuda", compute_type="float16")
-            logger.info("Whisper model initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize Whisper model with CUDA: {e}")
-            logger.info("Falling back to CPU...")
+        # First, check CUDA availability and driver compatibility
+        cuda_available = self._check_cuda_compatibility()
+        
+        if cuda_available:
             try:
-                self.model = WhisperModel("large-v3", device="cpu", compute_type="int8")
-                logger.info("Whisper model initialized successfully on CPU")
-            except Exception as cpu_error:
-                logger.error(f"Failed to initialize Whisper model on CPU: {cpu_error}")
-                raise RuntimeError(f"Could not initialize Whisper model: {cpu_error}")
+                logger.info("Initializing Whisper model (large-v3) with CUDA...")
+                self.model = WhisperModel("large-v3", device="cuda", compute_type="float16")
+                logger.info("Whisper model initialized successfully with CUDA")
+                return
+            except Exception as e:
+                logger.error(f"Failed to initialize Whisper model with CUDA: {e}")
+                if "CUDA driver version is insufficient" in str(e):
+                    logger.error("CUDA driver version is too old for the required CUDA runtime")
+                    logger.info("Please update your NVIDIA drivers or use CPU mode")
+        
+        # Fallback to CPU
+        logger.info("Falling back to CPU mode...")
+        try:
+            # Try with large-v3 first
+            logger.info("Attempting large-v3 model on CPU...")
+            self.model = WhisperModel("large-v3", device="cpu", compute_type="int8")
+            logger.info("Whisper large-v3 model initialized successfully on CPU")
+        except Exception as large_error:
+            logger.warning(f"Large-v3 model failed on CPU: {large_error}")
+            logger.info("Trying with base model as fallback...")
+            try:
+                # Fallback to smaller model if large-v3 fails on CPU
+                self.model = WhisperModel("base", device="cpu", compute_type="int8")
+                logger.info("Whisper base model initialized successfully on CPU")
+            except Exception as base_error:
+                logger.error(f"All model initialization attempts failed: {base_error}")
+                raise RuntimeError(f"Could not initialize any Whisper model: {base_error}")
+    
+    def _check_cuda_compatibility(self):
+        """Check if CUDA is available and compatible"""
+        try:
+            import torch
+            if not torch.cuda.is_available():
+                logger.info("CUDA not available on this system")
+                return False
+            
+            # Check CUDA device count
+            device_count = torch.cuda.device_count()
+            if device_count == 0:
+                logger.info("No CUDA devices found")
+                return False
+            
+            # Get CUDA version info
+            cuda_version = torch.version.cuda
+            driver_version = torch.cuda.get_device_properties(0).major
+            
+            logger.info(f"CUDA runtime version: {cuda_version}")
+            logger.info(f"GPU compute capability: {driver_version}")
+            logger.info(f"Available CUDA devices: {device_count}")
+            
+            # Try a simple CUDA operation to verify compatibility
+            test_tensor = torch.tensor([1.0]).cuda()
+            _ = test_tensor * 2  # Simple operation
+            
+            logger.info("CUDA compatibility check passed")
+            return True
+            
+        except Exception as e:
+            logger.warning(f"CUDA compatibility check failed: {e}")
+            if "CUDA driver version is insufficient" in str(e):
+                logger.error("CUDA driver version is insufficient for CUDA runtime version")
+                logger.error("Please update your NVIDIA drivers to a version compatible with CUDA runtime")
+            return False
     
     def transcribe_audio(self, audio_file, language=None, task="transcribe", word_timestamps=False, vad_filter=True):
         """
@@ -130,6 +185,44 @@ class WhisperService:
         return [
             "en", "zh", "de", "es", "ru", "ko", "fr", "ja", "pt", "tr", "pl", "ca", "nl", "ar", "sv", "it", "id", "hi", "fi", "vi", "he", "uk", "el", "ms", "cs", "ro", "da", "hu", "ta", "no", "th", "ur", "hr", "bg", "lt", "la", "mi", "ml", "cy", "sk", "te", "fa", "lv", "bn", "sr", "az", "sl", "kn", "et", "mk", "br", "eu", "is", "hy", "ne", "mn", "bs", "kk", "sq", "sw", "gl", "mr", "pa", "si", "km", "sn", "yo", "so", "af", "oc", "ka", "be", "tg", "sd", "gu", "am", "yi", "lo", "uz", "fo", "ht", "ps", "tk", "nn", "mt", "sa", "lb", "my", "bo", "tl", "mg", "as", "tt", "haw", "ln", "ha", "ba", "jw", "su"
         ]
+    
+    def get_model_info(self):
+        """Get information about the currently loaded model"""
+        if not self.model:
+            return {"status": "not_initialized", "error": "Model not initialized"}
+        
+        try:
+            import torch
+            
+            model_info = {
+                "status": "initialized",
+                "model_size": getattr(self.model, 'model_size_or_path', 'unknown'),
+                "device": getattr(self.model, 'device', 'unknown'),
+                "compute_type": getattr(self.model, 'compute_type', 'unknown')
+            }
+            
+            # Add CUDA info if available
+            if torch.cuda.is_available():
+                model_info["cuda_available"] = True
+                model_info["cuda_device_count"] = torch.cuda.device_count()
+                model_info["cuda_version"] = torch.version.cuda
+                
+                if torch.cuda.device_count() > 0:
+                    props = torch.cuda.get_device_properties(0)
+                    model_info["gpu_name"] = props.name
+                    model_info["gpu_memory"] = f"{props.total_memory / 1024**3:.1f} GB"
+            else:
+                model_info["cuda_available"] = False
+                model_info["reason"] = "CUDA not available or incompatible drivers"
+            
+            return model_info
+            
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": str(e),
+                "model_loaded": self.model is not None
+            }
 
 # Global instance
 whisper_service = WhisperService()

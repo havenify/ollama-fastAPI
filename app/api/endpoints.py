@@ -88,22 +88,35 @@ def register_routes(app):
     def whisper_health_check():
         """Check if Whisper service is working"""
         try:
-            # Simple health check
+            # Get detailed model information
+            model_info = whisper_service.get_model_info()
+            
             if whisper_service.model is None:
                 return jsonify({
                     "status": "unhealthy",
-                    "error": "Whisper model not initialized"
+                    "error": "Whisper model not initialized",
+                    "model_info": model_info
                 }), 503
             
+            # Determine overall health status
+            if model_info.get("status") == "initialized":
+                status = "healthy"
+                http_code = 200
+            else:
+                status = "degraded"
+                http_code = 200  # Still functional but not optimal
+            
             return jsonify({
-                "status": "healthy",
-                "model": "large-v3",
-                "device": "cuda" if whisper_service.model.device == "cuda" else "cpu"
-            })
+                "status": status,
+                "model_info": model_info,
+                "supported_languages_count": len(whisper_service.get_supported_languages())
+            }), http_code
+            
         except Exception as e:
             return jsonify({
                 "status": "unhealthy",
-                "error": str(e)
+                "error": str(e),
+                "model_loaded": whisper_service.model is not None
             }), 503
     @app.route("/chat", methods=["POST"])
     def chat():
