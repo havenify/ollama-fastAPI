@@ -169,6 +169,12 @@ Always respond using clean GitHub-flavored **Markdown**.
         full_prompt = f"{system_instruction}\n{chat_prompt}\nUser: {prompt}\nAI:"
         generate = stream_ollama(full_prompt, model)
         return Response(generate(), content_type="text/event-stream")
+    
+        # Vision to JSON endpoint
+        from app.api.vision_to_json_utils import vision_to_json_endpoint
+        @app.route('/vision-to-json', methods=['POST'])
+        def vision_to_json():
+            return vision_to_json_endpoint()
 
     @app.route("/rag_query", methods=["POST"])
     def rag_query():

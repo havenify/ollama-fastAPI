@@ -6,3 +6,10 @@ numpy
 faster-whisper==0.10.0
 torch==2.4.0+cu121
 torchaudio==2.4.0+cu121
+
+PyMuPDF
+Pillow
+pytesseract
+opencv-python
+json-repair
+rapidfuzz
