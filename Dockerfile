@@ -7,6 +7,12 @@ RUN apt-get update && apt-get install -y \
     python3 python3-pip python3-dev \
     build-essential \
     git \
+    # Tesseract OCR and related libs
+    tesseract-ocr \
+    libtesseract-dev \
+    libleptonica-dev \
+    pkg-config \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Set python3 as default python
