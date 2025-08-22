@@ -6,6 +6,7 @@ import os
 from app.services.grn import fetch_and_rank_grns, build_prompt
 from app.services.ollama import get_embedding, ask_ollama, get_models, stream_ollama, forward_to_ollama
 from app.services.whisper import whisper_service
+from app.api.vision_to_json_utils import vision_to_json_endpoint
 
 sessions = {}
 
@@ -170,11 +171,10 @@ Always respond using clean GitHub-flavored **Markdown**.
         generate = stream_ollama(full_prompt, model)
         return Response(generate(), content_type="text/event-stream")
     
-        # Vision to JSON endpoint
-        from app.api.vision_to_json_utils import vision_to_json_endpoint
-        @app.route('/vision-to-json', methods=['POST'])
-        def vision_to_json():
-            return vision_to_json_endpoint()
+    # Vision to JSON endpoint
+    @app.route('/vision-to-json', methods=['POST'])
+    def vision_to_json():
+        return vision_to_json_endpoint()
 
     @app.route("/rag_query", methods=["POST"])
     def rag_query():
