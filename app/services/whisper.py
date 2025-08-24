@@ -115,16 +115,20 @@ class WhisperService:
             
             logger.info(f"Starting transcription of audio file: {audio_path}")
             
-            # Perform transcription
+            # Perform transcription with optimized parameters to reduce repetition
             segments, info = self.model.transcribe(
                 audio_path,
                 language=language,
                 task=task,
                 word_timestamps=word_timestamps,
                 vad_filter=vad_filter,
-                beam_size=5,
-                best_of=5,
-                temperature=0.0
+                beam_size=1,  # Reduced to prevent multiple candidate paths that can cause repetition
+                best_of=1,    # Reduced to prevent averaging multiple attempts
+                temperature=0.0,  # Keep deterministic for consistency
+                condition_on_previous_text=False,  # Prevent conditioning on previous text which can cause loops
+                compression_ratio_threshold=2.4,  # Default threshold to detect repetitive text
+                logprob_threshold=-1.0,  # Default threshold for low probability segments
+                no_speech_threshold=0.6   # Increased threshold to better detect silence
             )
             
             # Process segments
