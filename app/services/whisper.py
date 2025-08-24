@@ -125,10 +125,7 @@ class WhisperService:
                 beam_size=1,  # Reduced to prevent multiple candidate paths that can cause repetition
                 best_of=1,    # Reduced to prevent averaging multiple attempts
                 temperature=0.0,  # Keep deterministic for consistency
-                condition_on_previous_text=False,  # Prevent conditioning on previous text which can cause loops
-                compression_ratio_threshold=2.4,  # Default threshold to detect repetitive text
-                logprob_threshold=-1.0,  # Default threshold for low probability segments
-                no_speech_threshold=0.6   # Increased threshold to better detect silence
+                condition_on_previous_text=False  # Prevent conditioning on previous text which can cause loops
             )
             
             # Process segments
