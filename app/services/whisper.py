@@ -83,7 +83,7 @@ class WhisperService:
                 logger.error("Please update your NVIDIA drivers to a version compatible with CUDA runtime")
             return False
     
-    def transcribe_audio(self, audio_file, language=None, task="transcribe", word_timestamps=False, vad_filter=True):
+    def transcribe_audio(self, audio_file, language=None, task="transcribe", word_timestamps=False, vad_filter=True, model="whisper"):
         """
         Transcribe audio file using Faster Whisper
         
@@ -93,13 +93,38 @@ class WhisperService:
             task: 'transcribe' or 'translate'
             word_timestamps: Whether to include word-level timestamps
             vad_filter: Whether to use voice activity detection
+            model: Model name ("whisper", "nvidia/canary-qwen-2.5b", "nvidia/parakeet-tdt-0.6b-v2")
             
         Returns:
             dict: Transcription results with text, segments, and metadata
         """
-        if not self.model:
-            raise RuntimeError("Whisper model not initialized")
-        
+        # Model selection logic
+        # Map simple model names to actual model identifiers
+        model_map = {
+            "whisper": "large-v3",
+            "canary": "nvidia/canary-qwen-2.5b",
+            "parakeet": "nvidia/parakeet-tdt-0.6b-v2"
+        }
+        model_name = model_map.get(model, "large-v3")
+        # If requested model is not loaded, load it
+        if not self.model or getattr(self.model, 'model_size_or_path', None) != model_name:
+            try:
+                logger.info(f"Loading model: {model_name}")
+                # Use CUDA if available for whisper, otherwise CPU
+                if model == "whisper":
+                    cuda_available = self._check_cuda_compatibility()
+                    device = "cuda" if cuda_available else "cpu"
+                    compute_type = "float16" if cuda_available else "int8"
+                else:
+                    # For NVIDIA models, use CPU for compatibility unless CUDA is available
+                    cuda_available = self._check_cuda_compatibility()
+                    device = "cuda" if cuda_available else "cpu"
+                    compute_type = "float16" if cuda_available else "int8"
+                self.model = WhisperModel(model_name, device=device, compute_type=compute_type)
+                logger.info(f"Model {model_name} loaded on {device} with compute_type {compute_type}")
+            except Exception as e:
+                logger.error(f"Failed to load model {model_name}: {e}")
+                raise RuntimeError(f"Could not load model {model_name}: {e}")
         try:
             # Create temporary file if needed
             temp_file_path = None
@@ -112,9 +137,7 @@ class WhisperService:
             else:
                 # It's a file path
                 audio_path = audio_file
-            
-            logger.info(f"Starting transcription of audio file: {audio_path}")
-            
+            logger.info(f"Starting transcription of audio file: {audio_path} using model: {model_name}")
             # Perform transcription with optimized parameters to reduce repetition
             segments, info = self.model.transcribe(
                 audio_path,
@@ -122,16 +145,14 @@ class WhisperService:
                 task=task,
                 word_timestamps=word_timestamps,
                 vad_filter=vad_filter,
-                beam_size=1,  # Reduced to prevent multiple candidate paths that can cause repetition
-                best_of=1,    # Reduced to prevent averaging multiple attempts
-                temperature=0.0,  # Keep deterministic for consistency
-                condition_on_previous_text=False  # Prevent conditioning on previous text which can cause loops
+                beam_size=1,
+                best_of=1,
+                temperature=0.0,
+                condition_on_previous_text=False
             )
-            
             # Process segments
             transcription_segments = []
             full_text = ""
-            
             for segment in segments:
                 segment_data = {
                     "id": segment.id,
@@ -141,7 +162,6 @@ class WhisperService:
                     "avg_logprob": segment.avg_logprob,
                     "no_speech_prob": segment.no_speech_prob
                 }
-                
                 if word_timestamps and hasattr(segment, 'words'):
                     segment_data["words"] = [
                         {
@@ -152,10 +172,8 @@ class WhisperService:
                         }
                         for word in segment.words
                     ]
-                
                 transcription_segments.append(segment_data)
                 full_text += segment.text.strip() + " "
-            
             result = {
                 "text": full_text.strip(),
                 "segments": transcription_segments,
@@ -165,14 +183,11 @@ class WhisperService:
                 "duration_after_vad": info.duration_after_vad if hasattr(info, 'duration_after_vad') else None,
                 "all_language_probs": info.all_language_probs if hasattr(info, 'all_language_probs') else None
             }
-            
-            logger.info(f"Transcription completed. Language: {info.language}, Duration: {info.duration:.2f}s")
+            logger.info(f"Transcription completed. Language: {info.language}, Duration: {info.duration:.2f}s, Model: {model_name}")
             return result
-            
         except Exception as e:
             logger.error(f"Error during transcription: {e}")
             raise RuntimeError(f"Transcription failed: {str(e)}")
-        
         finally:
             # Clean up temporary file if created
             if temp_file_path and os.path.exists(temp_file_path):

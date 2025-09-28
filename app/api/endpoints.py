@@ -20,49 +20,57 @@ def register_routes(app):
     @app.route("/transcribe", methods=["POST"])
     def transcribe_audio():
         """
-        Transcribe audio file using Whisper
+        Transcribe audio file using Whisper or other supported models
         Accepts: multipart/form-data with audio file
-        Optional parameters: language, task, word_timestamps, vad_filter
+        Optional parameters: language, task, word_timestamps, vad_filter, model
         """
+        SUPPORTED_MODELS = [
+            "whisper",
+            "canary",
+            "parakeet"
+        ]
         try:
             # Check if audio file is provided
             if 'audio' not in request.files:
                 return jsonify({"error": "No audio file provided"}), 400
-            
             audio_file = request.files['audio']
             if audio_file.filename == '':
                 return jsonify({"error": "No audio file selected"}), 400
-            
             if not allowed_audio_file(audio_file.filename):
                 return jsonify({
-                    "error": "Unsupported audio format", 
+                    "error": "Unsupported audio format",
                     "supported_formats": list(ALLOWED_AUDIO_EXTENSIONS)
                 }), 400
-            
             # Get optional parameters
             language = request.form.get('language')  # e.g., 'en', 'es', 'fr'
             task = request.form.get('task', 'transcribe')  # 'transcribe' or 'translate'
             word_timestamps = request.form.get('word_timestamps', 'false').lower() == 'true'
             vad_filter = request.form.get('vad_filter', 'true').lower() == 'true'
-            
+            model = request.form.get('model', 'whisper')
             # Validate task parameter
             if task not in ['transcribe', 'translate']:
                 return jsonify({"error": "Task must be 'transcribe' or 'translate'"}), 400
-            
+            # Validate model parameter (simple names: 'canary' and 'parakeet')
+            if model not in SUPPORTED_MODELS:
+                return jsonify({
+                    "error": "Unsupported model",
+                    "supported_models": SUPPORTED_MODELS,
+                    "note": "Default is 'whisper'. Use 'canary' or 'parakeet' to select NVIDIA models."
+                }), 400
             # Perform transcription
             result = whisper_service.transcribe_audio(
                 audio_file,
                 language=language,
                 task=task,
                 word_timestamps=word_timestamps,
-                vad_filter=vad_filter
+                vad_filter=vad_filter,
+                model=model
             )
-            
             return jsonify({
                 "success": True,
-                "transcription": result
+                "transcription": result,
+                "model": model
             })
-            
         except Exception as e:
             return jsonify({
                 "error": "Transcription failed",
