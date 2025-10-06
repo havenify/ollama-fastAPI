@@ -18,17 +18,54 @@ RUN apt-get update && apt-get install -y \
     libxext6 \
     libxrender-dev \
     libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
+    # Audio processing dependencies
+    sox \
+    libsox-dev \
+    libsox-fmt-all \
+    libsndfile1 \
+    libsndfile-dev \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/* \
+    && git config --global core.symlinks true
 
 # Set python3 as default python
 RUN ln -s /usr/bin/python3 /usr/bin/python
 
 # Install torch/torchaudio with CUDA 12.1 builds
-RUN pip install --upgrade pip
-RUN pip install --no-cache-dir \
+RUN pip install --upgrade pip setuptools wheel
+
+# Install Python dependencies in the correct order
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir \
+    numpy==1.23.5 \
+    scipy \
+    librosa \
+    soundfile \
+    numba \
+    inflect \
+    sentencepiece \
+    sacrebleu \
+    'huggingface-hub==0.17.3' \
+    && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cu121 \
     torch==2.4.0+cu121 \
     torchaudio==2.4.0+cu121 \
-    --index-url https://download.pytorch.org/whl/cu121
+    && pip install --no-cache-dir \
+    hydra-core \
+    omegaconf \
+    'transformers==4.33.0' \
+    && pip install --no-cache-dir \
+    'nemo_toolkit[asr]==1.21.0'
+
+# Install NeMo and its dependencies
+RUN pip install --no-cache-dir nemo_toolkit[asr]==1.20.0 && \
+    pip install --no-cache-dir \
+    hydra-core \
+    omegaconf \
+    soundfile \
+    sox \
+    unidecode \
+    webdataset \
+    youtokentome
 
 # Copy requirements and install rest
 COPY requirements.txt .
