@@ -203,6 +203,7 @@ class WhisperService:
                     beam_size=1,
                     best_of=1,
                     temperature=0.0,
+                    repetition_penalty=1.1,
                     condition_on_previous_text=False
                 )
                 
