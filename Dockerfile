@@ -25,8 +25,26 @@ RUN apt-get update && apt-get install -y \
     libsndfile1 \
     libsndfile-dev \
     ffmpeg \
+    libavformat-dev \
+    libavcodec-dev \
+    libavdevice-dev \
+    libavutil-dev \
+    libavfilter-dev \
+    libswscale-dev \
+    libswresample-dev \
     && rm -rf /var/lib/apt/lists/* \
     && git config --global core.symlinks true
+
+# Build and install ffmpeg 6.1 for compatibility with av
+RUN apt-get update && apt-get install -y nasm yasm wget && \
+    wget https://ffmpeg.org/releases/ffmpeg-6.1.tar.bz2 && \
+    tar xjvf ffmpeg-6.1.tar.bz2 && \
+    cd ffmpeg-6.1 && \
+    ./configure --enable-shared --disable-static --enable-gpl --enable-nonfree && \
+    make -j$(nproc) && \
+    make install && \
+    cd .. && rm -rf ffmpeg-6.1* && \
+    ldconfig
 
 # Set python3 as default python
 RUN ln -s /usr/bin/python3 /usr/bin/python
