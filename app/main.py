@@ -8,11 +8,13 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
 
 CORS(app, origins=[
-    "*",
+    "https://*.techpranee.com",
+    "https://*.hyrefast.ai",
+    "https://*.erpz.in",
+    "https://*.mexy.ai",
     "http://localhost",
     "http://localhost:8080",
     "http://127.0.0.1:8080",
-    "https://chat.techpranee.com"
 ], supports_credentials=True)
 
 register_routes(app)
